@@ -1,8 +1,21 @@
 import { enableTailwind } from "@remotion/tailwind-v4";
+import path from "path";
 
 /**
  *  @param {import('webpack').Configuration} currentConfig
  */
 export const webpackOverride = (currentConfig) => {
-  return enableTailwind(currentConfig);
+  const config = enableTailwind(currentConfig);
+  const resolved = config.resolve ?? {};
+  const alias = resolved.alias ?? {};
+  return {
+    ...config,
+    resolve: {
+      ...resolved,
+      alias: {
+        ...alias,
+        "@": path.join(process.cwd(), "src"),
+      },
+    },
+  };
 };

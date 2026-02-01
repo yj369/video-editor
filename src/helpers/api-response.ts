@@ -26,6 +26,7 @@ export const executeApi =
         data: data,
       });
     } catch (err) {
+      console.error("API Error:", err);
       return NextResponse.json(
         { type: "error", message: (err as Error).message },
         {
