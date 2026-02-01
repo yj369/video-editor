@@ -1,10 +1,5 @@
-import React, { useMemo } from 'react';
-import { 
-  Crown, Sparkles, AlertCircle, Star, MessageCircle, 
-  Paperclip, Calendar, Activity, Type, Video, Music, 
-  Image as ImageIcon, Grid, CircleDashed, Target, 
-  Plus, X, Box, Film as FilmIcon, PenTool, LayoutTemplate, Sticker
-} from 'lucide-react';
+import { useMemo } from 'react';
+import { Sparkles, AlertCircle, Star, MessageCircle, Paperclip, Calendar, Activity } from 'lucide-react';
 import { Easing, interpolate } from 'remotion';
 import { THEME_CONFIG, NEGATIVE_KEYWORDS, POSITIVE_KEYWORDS } from "@/lib/money-energy";
 
@@ -211,8 +206,6 @@ export const BRollLayer = ({
     positiveWords?: string[];
     negativeWords?: string[];
 }) => {
-    const isActive = true; // Always active when rendered in Remotion sequence
-    
     const stickers = { positive: Sparkles, negative: AlertCircle, neutral: Star };
     const StickerIcon = event === 'positive' ? stickers.positive : (event === 'negative' ? stickers.negative : stickers.neutral);
     
@@ -604,7 +597,7 @@ export const SubtitleLayer = ({
                         const translateY = (1 - progress) * 40;
                         const rotate = isHighlight ? -2 : 0;
                         let bgClass = "bg-white text-black"; 
-                        if (isHighlight) {
+                        if (currentHighlightWord) {
                             const sentiment = getWordSentimentWithConfig(currentHighlightWord, event, positiveWords, negativeWords);
                             if (sentiment === 'negative') bgClass = `${THEME_CONFIG.accentBg} text-white`;
                             else if (sentiment === 'positive') bgClass = `${THEME_CONFIG.primaryBg} text-white`;

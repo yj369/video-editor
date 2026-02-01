@@ -184,6 +184,7 @@ export const PropertiesPanel = ({
 
   const isVisual = ["video", "image", "text"].includes(clip.type);
   const isText = clip.type === "text";
+  const isBackground = clip.type === "background";
   const isMediaVisual = clip.type === "image" || clip.type === "video";
   const isAudio = clip.type === "audio" || clip.type === "video";
   const frameTime = currentTime ?? 0;

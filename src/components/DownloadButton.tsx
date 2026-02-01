@@ -3,28 +3,12 @@ import { State } from "../helpers/use-rendering";
 import { Button } from "./Button";
 import { Spacing } from "./Spacing";
 
-const Megabytes: React.FC<{
-  sizeInBytes: number;
-}> = ({ sizeInBytes }) => {
-  const megabytes = Intl.NumberFormat("en", {
-    notation: "compact",
-    style: "unit",
-    unit: "byte",
-    unitDisplay: "narrow",
-  }).format(sizeInBytes);
-  return <span className="opacity-60">{megabytes}</span>;
-};
-
 export const DownloadButton: React.FC<{
   state: State;
   undo: () => void;
 }> = ({ state, undo }) => {
-  if (state.status === "rendering") {
-    return <Button disabled>Download video</Button>;
-  }
-
   if (state.status !== "done") {
-    throw new Error("Download button should not be rendered when not done");
+    return null;
   }
 
   return (
@@ -33,11 +17,9 @@ export const DownloadButton: React.FC<{
         <UndoIcon></UndoIcon>
       </Button>
       <Spacing></Spacing>
-      <a href={state.url}>
+      <a href={state.url} download>
         <Button>
           Download video
-          <Spacing></Spacing>
-          <Megabytes sizeInBytes={state.size}></Megabytes>
         </Button>
       </a>
     </div>

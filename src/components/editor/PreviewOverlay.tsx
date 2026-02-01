@@ -22,9 +22,8 @@ export const PreviewOverlay = ({
   containerHeight,
   onUpdate,
 }: PreviewOverlayProps) => {
-  const [isDragging, setIsDragging] = useState(false);
   const lastUpdatesRef = useRef<Partial<Clip> | null>(null);
-  const dragPointerRef = useRef<{ id: number; el: HTMLElement } | null>(null);
+  const dragPointerRef = useRef<{ id: number; el: Element } | null>(null);
   const [dragState, setDragState] = useState<{
     startX: number;
     startY: number;
@@ -61,19 +60,6 @@ export const PreviewOverlay = ({
   const screenY = offsetY + clipY * scale;
   const screenW = clipW * scale;
   const screenH = clipH * scale;
-
-  // Helpers to rotate a point around a center
-  const rotatePoint = (x: number, y: number, cx: number, cy: number, angleDeg: number) => {
-    const rad = (angleDeg * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    const dx = x - cx;
-    const dy = y - cy;
-    return {
-      x: cx + dx * cos - dy * sin,
-      y: cy + dx * sin + dy * cos,
-    };
-  };
 
   const computeUpdates = (clientX: number, clientY: number, state: NonNullable<typeof dragState>) => {
     const { startX, startY, mode, startClip } = state;
@@ -140,7 +126,6 @@ export const PreviewOverlay = ({
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragPointerRef.current = { id: e.pointerId, el: e.currentTarget };
-    setIsDragging(true);
     const nextState = {
       startX: e.clientX,
       startY: e.clientY,
@@ -162,7 +147,6 @@ export const PreviewOverlay = ({
         lastUpdatesRef.current = updates;
         onUpdate(clip.id, updates, { commit: true });
       }
-      setIsDragging(false);
       setDragState(null);
       lastUpdatesRef.current = null;
       if (dragPointerRef.current) {

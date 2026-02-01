@@ -5,7 +5,6 @@ import { InputContainer } from "./Container";
 import { DownloadButton } from "./DownloadButton";
 import { ErrorComp } from "./Error";
 import { Input } from "./Input";
-import { ProgressBar } from "./ProgressBar";
 import { Spacing } from "./Spacing";
 import { COMP_NAME, CompositionProps } from "@/types/constants";
 import { useRendering } from "../helpers/use-rendering";
@@ -43,12 +42,8 @@ export const RenderControls: React.FC<{
           ) : null}
         </>
       ) : null}
-      {state.status === "rendering" || state.status === "done" ? (
+      {state.status === "done" ? (
         <>
-          <ProgressBar
-            progress={state.status === "rendering" ? state.progress : 1}
-          />
-          <Spacing></Spacing>
           <AlignEnd>
             <DownloadButton undo={undo} state={state}></DownloadButton>
           </AlignEnd>

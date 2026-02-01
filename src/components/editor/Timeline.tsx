@@ -70,7 +70,6 @@ export const Timeline = ({
   const rulerRef = useRef<HTMLDivElement>(null);
   const trackHeaderWidth = 120;
   
-  const [activeDragClip, setActiveDragClip] = useState<Clip | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
 
   // Measure timeline width based on duration and zoom
@@ -86,7 +85,6 @@ export const Timeline = ({
 
   const handleDragStart = (event: any) => {
     if (event.active.data.current?.type === "clip") {
-      setActiveDragClip(event.active.data.current.clip);
       onSelectClip(event.active.data.current.clip.id);
     }
   };
@@ -153,7 +151,6 @@ export const Timeline = ({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over, delta } = event;
-    setActiveDragClip(null);
 
     if (!active.data.current || active.data.current.type !== "clip") return;
     
