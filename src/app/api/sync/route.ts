@@ -4,9 +4,13 @@ import { EditorState } from '@/lib/db/models';
 
 export async function POST(req: NextRequest) {
   try {
-    await dbConnect();
+    const mongoose = await dbConnect();
+    console.log(`[Sync] Connected to DB: ${mongoose.connection.name}`); // Debug: Database name
+
     const body = await req.json();
     const { projectId, ...data } = body;
+
+    console.log(`[Sync] Syncing project: ${projectId}`); // Debug: Project ID
 
     if (!projectId) {
       return NextResponse.json({ error: 'Missing projectId' }, { status: 400 });
@@ -19,9 +23,11 @@ export async function POST(req: NextRequest) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
+    console.log(`[Sync] Write result:`, updatedState ? 'Success' : 'Null'); // Debug: Write result
+
     return NextResponse.json({ success: true, data: updatedState });
   } catch (error: any) {
-    console.error('Sync POST error:', error);
+    console.error('[Sync] POST error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

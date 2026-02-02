@@ -27,9 +27,11 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      dbName: process.env.MONGODB_DB || 'test', // Use MONGODB_DB if it exists
     };
 
     cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
+      console.log(`[DB] Successfully connected to database: ${process.env.MONGODB_DB || 'test'}`);
       return mongoose;
     });
   }
