@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { useParams } from "next/navigation";
-import { Play, Pause, RefreshCw, Star, Crown, MessageCircle, AlertCircle, Type, Target, Image as ImageIcon, Shuffle, Video, Film, Grid, Move, CircleDashed, Paperclip, Calendar, Scissors, Sparkles, Sticker, Plus, X, ThumbsUp, Activity, Save, Box, PenTool, LayoutTemplate, Film as FilmIcon, Clock, Settings, Wand2, Trash2, ImageOff, ChevronDown, ChevronUp, Dices, Moon, Sun, Music } from 'lucide-react';
+import { Play, Pause, RefreshCw, Star, Crown, MessageCircle, AlertCircle, Type, Target, Image as ImageIcon, Shuffle, Video, Film, Grid, Move, CircleDashed, Paperclip, Calendar, Scissors, Sparkles, Sticker, Plus, X, ThumbsUp, Activity, Save, Box, PenTool, LayoutTemplate, Film as FilmIcon, Clock, Settings, Wand2, Trash2, ImageOff, ChevronDown, ChevronUp, Dices, Moon, Sun, Music, CloudUpload, CloudDownload } from 'lucide-react';
 import { Timeline } from "@/components/editor/Timeline";
 import { PreviewOverlay } from "@/components/editor/PreviewOverlay";
 import { ResourcesPanel } from "@/components/editor/ResourcesPanel";
@@ -1842,6 +1842,212 @@ export default function App() {
       },
       [currentTime, handleDropClip]
   );
+
+  const dataURItoBlob = (dataURI: string) => {
+    const byteString = atob(dataURI.split(',')[1]);
+    const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeString });
+  };
+
+  const handleSync = async () => {
+      try {
+          // 1. Load Local Assets from IDB
+          const imageRecords = await loadLocalImageRecords(projectId);
+          const audioRecords = await loadLocalAudioRecords(projectId);
+
+          // 2. Convert Blobs to Base64
+          const serializedImages = await Promise.all(
+              imageRecords.map(async (record) => ({
+                  ...record,
+                  data: await blobToDataUrl(record.data), // Convert Blob to DataURL
+              }))
+          );
+
+          const serializedAudios = await Promise.all(
+              audioRecords.map(async (record) => ({
+                  ...record,
+                  data: await blobToDataUrl(record.data),
+              }))
+          );
+
+          const payload = {
+              version: 1,
+              savedAt: Date.now(),
+              projectId,
+              themeMode,
+              config,
+              scriptData,
+              tracks,
+              layerClips,
+              markers,
+              selectedClipIds,
+              selectedMarkerId,
+              activeTab,
+              gridDirection,
+              exportPreset,
+              inputText,
+              isSRTMode,
+              activeSubtitleStyle,
+              activeCutoutStyle,
+              activeBrollStyle,
+              activeMotionStyle,
+              assets: {
+                  images: serializedImages,
+                  audios: serializedAudios,
+              },
+          };
+
+          const res = await fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+
+          if (!res.ok) {
+              if (res.status === 413) {
+                  throw new Error('Project too large to sync (check image/audio sizes).');
+              }
+              throw new Error('Sync failed');
+          }
+          alert('Successfully synced to cloud (including local assets)!');
+      } catch (e: any) {
+          console.error(e);
+          alert(`Failed to sync to cloud: ${e.message}`);
+      }
+  };
+
+  const handleFetch = async () => {
+      try {
+          const res = await fetch(`/api/sync?projectId=${projectId}`);
+          if (!res.ok) throw new Error('Fetch failed');
+          const { data: parsed } = await res.json();
+          
+          if (!parsed) return;
+          
+          // 1. Restore Assets to IDB
+          if (parsed.assets) {
+              const { images = [], audios = [] } = parsed.assets;
+              
+              // Restore Images
+              const nextImageMap: Record<string, string> = {};
+              await Promise.all(images.map(async (record: any) => {
+                  try {
+                      const blob = dataURItoBlob(record.data);
+                      const restoredRecord: LocalImageRecord = {
+                          id: record.id,
+                          projectId: record.projectId,
+                          name: record.name,
+                          type: record.type,
+                          size: record.size,
+                          createdAt: record.createdAt,
+                          data: blob,
+                      };
+                      await saveLocalImageRecord(restoredRecord);
+                      nextImageMap[record.id] = record.data;
+                  } catch (err) {
+                      console.warn(`Failed to restore image ${record.id}`, err);
+                  }
+              }));
+              setLocalImageDataUrls((prev) => ({ ...prev, ...nextImageMap }));
+
+              // Restore Audios
+              const nextAudioMap: Record<string, string> = {};
+              const nextAudioMeta: Record<string, { name: string; duration: number }> = {};
+              await Promise.all(audios.map(async (record: any) => {
+                  try {
+                      const blob = dataURItoBlob(record.data);
+                      const restoredRecord: LocalAudioRecord = {
+                          id: record.id,
+                          projectId: record.projectId,
+                          name: record.name,
+                          type: record.type,
+                          size: record.size,
+                          duration: record.duration,
+                          createdAt: record.createdAt,
+                          data: blob,
+                      };
+                      await saveLocalAudioRecord(restoredRecord);
+                      nextAudioMap[record.id] = record.data;
+                      nextAudioMeta[record.id] = { name: record.name, duration: record.duration };
+                  } catch (err) {
+                      console.warn(`Failed to restore audio ${record.id}`, err);
+                  }
+              }));
+              setLocalAudioDataUrls((prev) => ({ ...prev, ...nextAudioMap }));
+              setLocalAudioMeta((prev) => ({ ...prev, ...nextAudioMeta }));
+          }
+
+          if (parsed.themeMode === "dark" || parsed.themeMode === "light") {
+              setThemeMode(parsed.themeMode);
+          }
+
+          if (parsed.config && typeof parsed.config === "object") {
+              setConfig({
+                  positiveWords: Array.isArray(parsed.config.positiveWords) ? parsed.config.positiveWords : DEFAULT_POSITIVE_KEYWORDS,
+                  negativeWords: Array.isArray(parsed.config.negativeWords) ? parsed.config.negativeWords : DEFAULT_NEGATIVE_KEYWORDS,
+                  bgKeywords: Array.isArray(parsed.config.bgKeywords) ? parsed.config.bgKeywords : DEFAULT_BG_KEYWORDS,
+                  images: Array.isArray(parsed.config.images) ? parsed.config.images : DEFAULT_STOCK_IMAGES,
+                  audios: Array.isArray(parsed.config.audios) ? parsed.config.audios : DEFAULT_AUDIO,
+              });
+          }
+
+          if (Array.isArray(parsed.scriptData)) setScriptData(parsed.scriptData);
+          if (Array.isArray(parsed.tracks)) {
+              const nextTracks = [...parsed.tracks];
+              if (!nextTracks.some((track) => track.id === "audio")) {
+                  nextTracks.splice(3, 0, { id: "audio", label: "音频", type: "audio" });
+              }
+              setTracks(nextTracks);
+          }
+          if (Array.isArray(parsed.layerClips)) setLayerClips(parsed.layerClips);
+          if (Array.isArray(parsed.markers)) setMarkers(parsed.markers);
+
+          const availableIds = new Set<string>([
+              ...(Array.isArray(parsed.scriptData) ? parsed.scriptData : []).map((item) => item?.id).filter(Boolean),
+              ...(Array.isArray(parsed.layerClips) ? parsed.layerClips : []).map((clip) => clip?.id).filter(Boolean),
+          ]);
+
+          if (Array.isArray(parsed.selectedClipIds)) {
+              setSelectedClipIds(parsed.selectedClipIds.filter((id) => availableIds.has(id)));
+          }
+
+          if (typeof parsed.selectedMarkerId === "string") {
+              const markerIds = new Set(
+                  (Array.isArray(parsed.markers) ? parsed.markers : []).map((marker) => marker?.id).filter(Boolean)
+              );
+              setSelectedMarkerId(markerIds.has(parsed.selectedMarkerId) ? parsed.selectedMarkerId : null);
+          }
+
+          if (typeof parsed.activeTab === "string" && ["editor", "storyboard", "style", "settings", "resources"].includes(parsed.activeTab)) {
+              setActiveTab(parsed.activeTab);
+          }
+
+          if (parsed.gridDirection === "forward" || parsed.gridDirection === "backward") {
+              setGridDirection(parsed.gridDirection);
+          }
+
+          if (typeof parsed.exportPreset === "string" && EXPORT_PRESETS.some((preset) => preset.id === parsed.exportPreset)) {
+              setExportPreset(parsed.exportPreset);
+          }
+
+          if (typeof parsed.inputText === "string") setInputText(parsed.inputText);
+          if (typeof parsed.isSRTMode === "boolean") setIsSRTMode(parsed.isSRTMode);
+          if (typeof parsed.activeSubtitleStyle === "string") setActiveSubtitleStyle(parsed.activeSubtitleStyle);
+          if (typeof parsed.activeCutoutStyle === "string") setActiveCutoutStyle(parsed.activeCutoutStyle);
+          if (typeof parsed.activeBrollStyle === "string") setActiveBrollStyle(parsed.activeBrollStyle);
+          if (typeof parsed.activeMotionStyle === "string") setActiveMotionStyle(parsed.activeMotionStyle);
+
+          alert('Successfully fetched from cloud (including local assets)!');
+      } catch (e: any) {
+          console.error(e);
+          alert(`Failed to fetch from cloud: ${e.message}`);
+      }
+  };
   
   return (
     <div className="h-screen w-screen flex overflow-hidden transition-colors duration-200" style={{ backgroundColor: theme.bg, color: theme.text }}>
@@ -1970,15 +2176,35 @@ export default function App() {
                        ))}
                    </div>
                    
-                   {/* Theme Toggle */}
-                   <button 
-                       onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                       className="p-2 rounded-xl border shadow-sm transition-all hover:scale-105"
-                       style={{ backgroundColor: theme.panelBg, borderColor: theme.border, color: theme.text }}
-                       title={themeMode === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                   >
-                       {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                   </button>
+                   <div className="flex gap-2">
+                       {/* Sync/Fetch Buttons */}
+                       <button
+                           onClick={handleSync}
+                           className="p-2 rounded-xl border shadow-sm transition-all hover:scale-105"
+                           style={{ backgroundColor: theme.panelBg, borderColor: theme.border, color: theme.text }}
+                           title="Sync to Cloud"
+                       >
+                           <CloudUpload size={18} />
+                       </button>
+                       <button
+                           onClick={handleFetch}
+                           className="p-2 rounded-xl border shadow-sm transition-all hover:scale-105"
+                           style={{ backgroundColor: theme.panelBg, borderColor: theme.border, color: theme.text }}
+                           title="Fetch from Cloud"
+                       >
+                           <CloudDownload size={18} />
+                       </button>
+
+                       {/* Theme Toggle */}
+                       <button 
+                           onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+                           className="p-2 rounded-xl border shadow-sm transition-all hover:scale-105"
+                           style={{ backgroundColor: theme.panelBg, borderColor: theme.border, color: theme.text }}
+                           title={themeMode === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                       >
+                           {themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                       </button>
+                   </div>
                </div>
 
                {/* 内容区域 */}
