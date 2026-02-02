@@ -205,12 +205,32 @@ export const Main = ({
         // Visual properties with defaults
         const x = resolveKeyframe(clip.keyframes?.x, (clip.x !== undefined && clip.x !== null) ? Number(clip.x) : baseWidth / 2);
         const y = resolveKeyframe(clip.keyframes?.y, (clip.y !== undefined && clip.y !== null) ? Number(clip.y) : baseHeight / 2);
-        const w = clip.width ? Number(clip.width) : undefined;
-        const h = clip.height ? Number(clip.height) : undefined;
+        
+        // Fix: Default to baseWidth/baseHeight for visual elements if width/height are undefined
+        // This ensures containers for styles (like cutout/broll) have dimensions to fill
+        const defaultW = clip.type === "text" ? undefined : baseWidth;
+        const defaultH = clip.type === "text" ? undefined : baseHeight;
+        
+        const w = clip.width ? Number(clip.width) : defaultW;
+        const h = clip.height ? Number(clip.height) : defaultH;
+        
         const scale = resolveKeyframe(clip.keyframes?.scale, Number(clip.scale) || 1);
         const rotation = resolveKeyframe(clip.keyframes?.rotation, Number(clip.rotation) || 0);
         const baseOpacity = resolveKeyframe(clip.keyframes?.opacity, clip.opacity !== undefined ? Number(clip.opacity) : 1);
-        const zIndex = Number(clip.zIndex) || index; // Fallback to index if no zIndex
+        const resolveZIndex = () => {
+            if (clip.zIndex !== undefined && clip.zIndex !== null && Number.isFinite(Number(clip.zIndex))) {
+                return Number(clip.zIndex);
+            }
+            if (clip.type === "background") return 0;
+            if (clip.type === "text") return 80;
+            if (clip.type === "image" || clip.type === "video") {
+                if (clip.trackId === "cutout") return 20;
+                if (clip.trackId === "broll") return 10;
+                return 15;
+            }
+            return index;
+        };
+        const zIndex = resolveZIndex();
 
         const transitionIn = Number(clip.transitions?.in) || 0;
         const transitionOut = Number(clip.transitions?.out) || 0;
@@ -272,7 +292,7 @@ export const Main = ({
         if (clip.type === "text" && clip.subtitleStyle) {
              return (
                 <Sequence key={clip.id} from={from} durationInFrames={durationInFrames} layout="none">
-                    <div style={overlayStyle}>
+                    <div style={style}>
                         <SubtitleLayer 
                             text={clip.src} 
                             frame={frame - from} 
@@ -291,7 +311,7 @@ export const Main = ({
         if ((clip.type === "image" || clip.type === "video") && clip.visualStyle && clip.src) {
              return (
                 <Sequence key={clip.id} from={from} durationInFrames={durationInFrames} layout="none">
-                    <div style={overlayStyle}>
+                    <div style={style}>
                         <BRollLayer 
                             src={clip.src} 
                             frame={frame - from} 

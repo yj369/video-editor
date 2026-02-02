@@ -168,7 +168,7 @@ export const TimelineClip = ({ clip, pixelsPerSecond, height, isSelected, isLock
           }
       };
 
-      const onPointerUp = (upEvent: PointerEvent) => {
+      const onPointerUp = () => {
           if (Object.keys(finalUpdates).length > 0) {
               onResize?.(clip.id, finalUpdates, { commit: true });
           }
@@ -190,7 +190,7 @@ export const TimelineClip = ({ clip, pixelsPerSecond, height, isSelected, isLock
       ref={setNodeRef}
       style={style}
       {...(() => {
-        const { onPointerDown, ...rest } = listeners || {};
+        const { onPointerDown: _, ...rest } = listeners || {};
         return rest;
       })()}
       {...attributes}

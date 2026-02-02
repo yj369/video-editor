@@ -87,10 +87,10 @@ const TrackSchema = z.object({
   isLocked: z.boolean().optional(),
 });
 
-export const DURATION_IN_FRAMES = 900; // 30s * 30fps
+export const DURATION_IN_FRAMES = 1800; // 30s * 60fps
 export const VIDEO_WIDTH = 1920;
 export const VIDEO_HEIGHT = 1080;
-export const VIDEO_FPS = 30;
+export const VIDEO_FPS = 60;
 
 export const CompositionProps = z.object({
   clips: z.array(ClipSchema),

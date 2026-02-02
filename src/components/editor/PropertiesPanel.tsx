@@ -306,6 +306,18 @@ export const PropertiesPanel = ({
           </div>
         )}
 
+        {isText && (
+          <div className="space-y-3">
+            <h3 className="text-[10px] uppercase font-bold text-white/40 tracking-wider mt-2">文字内容 / Text</h3>
+            <textarea
+              className="w-full min-h-[120px] bg-[#1c212b] border border-white/10 rounded p-2 text-xs text-white outline-none focus:border-purple-500/50 resize-y"
+              value={clip.src ?? ""}
+              onChange={(e) => onUpdate(clip.id, { src: e.target.value })}
+              placeholder="输入字幕内容..."
+            />
+          </div>
+        )}
+
         {(isText) && (
             <div className="space-y-3">
                 <h3 className="text-[10px] uppercase font-bold text-white/40 tracking-wider mt-2">情感 / Sentiment</h3>

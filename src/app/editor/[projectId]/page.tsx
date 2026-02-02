@@ -1,4 +1,5 @@
 // @ts-nocheck
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
@@ -6,6 +7,7 @@ import { useParams } from "next/navigation";
 import { Play, Pause, RefreshCw, Star, Crown, MessageCircle, AlertCircle, Type, Target, Image as ImageIcon, Shuffle, Video, Film, Grid, Move, CircleDashed, Paperclip, Calendar, Scissors, Sparkles, Sticker, Plus, X, ThumbsUp, Activity, Save, Box, PenTool, LayoutTemplate, Film as FilmIcon, Clock, Settings, Wand2, Trash2, ImageOff, ChevronDown, ChevronUp, Dices, Moon, Sun, Music } from 'lucide-react';
 import { Timeline } from "@/components/editor/Timeline";
 import { PreviewOverlay } from "@/components/editor/PreviewOverlay";
+import { ResourcesPanel } from "@/components/editor/ResourcesPanel";
 import { useRendering } from "@/helpers/use-rendering";
 import { COMP_NAME, VIDEO_FPS } from "@/types/constants";
 import type { Clip, Track } from "@/types/editor";
@@ -341,7 +343,7 @@ type ScriptItem = {
 // ========================================== 
 // 🖼️ 组件：视觉元素 (使用 React.memo 优化性能)
 // ========================================== 
-const MotionARoll = memo(({ style, activeText, isPlaying, bgKeywords, gridDirection = 'forward' }) => {
+const MotionARoll = memo(({ style, isPlaying, bgKeywords, gridDirection = 'forward' }) => {
     const plusData = useMemo(() => {
         if (style !== 'plus') return [];
         return Array.from({ length: 110 }).map((_, i) => {
@@ -385,8 +387,8 @@ const MotionARoll = memo(({ style, activeText, isPlaying, bgKeywords, gridDirect
                 />
                 <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-indigo-900/30 to-transparent pointer-events-none z-0"></div>
                 <style>{`
-                    @keyframes gridMoveFwd { 0% { background-position: 0 0; } 100% { background-position: 0 ${size}px; } }
-                    @keyframes gridMoveBwd { 0% { background-position: 0 0; } 100% { background-position: 0 -${size}px; } }
+                    @keyframes gridMoveFwd { 0% { background-position: 0 0; } 100% { background-position: 0 ${size}px; } } 
+                    @keyframes gridMoveBwd { 0% { background-position: 0 0; } 100% { background-position: 0 -${size}px; } } 
                 `}</style>
             </div>
         );
@@ -506,7 +508,6 @@ const BRollLayer = memo(({ src, event, isActive, style }) => {
     return <div className={`absolute inset-0 transition-opacity duration-700 ${isActive ? 'opacity-100' : 'opacity-0'}`}><img src={src} className={`w-full h-full object-cover transition-transform duration-[10000ms] ${isActive ? 'scale-110' : 'scale-100'}`} style={filterStyle} alt="b-roll" onError={(e) => e.target.src='https://placehold.co/600x800/EEE/31343C?text=No+Image'}/>{overlay}</div>;
 });
 
-// ... [Text components remain unchanged] ...
 const FocusText = ({ text, frame, highlightWords, event, getSentiment }) => {
     const wordsToShow = highlightWords.length > 0 ? highlightWords : [text];
     return <div className="w-full h-full flex flex-col justify-center items-center relative z-40"><div className="flex flex-col gap-4 items-center">{wordsToShow.map((word, idx) => { const delay = idx * 10; const progress = Math.min(1, Math.max(0, (frame - delay) / 8)); const show = frame > delay; const scale = show ? 1 + (1 - progress) * 2 : 3; const opacity = progress; const sentiment = getSentiment(word); let colorClass = "text-white"; if (sentiment === 'negative') colorClass = DEFAULT_THEME_CONFIG.accentColor; else if (sentiment === 'positive') colorClass = DEFAULT_THEME_CONFIG.primaryColor; return (<div key={idx} style={{ opacity, transform: `scale(${scale})`, filter: `blur(${(1-progress)*10}px)`}} className={`font-black text-5xl md:text-6xl tracking-tighter drop-shadow-2xl ${colorClass}`}>{word}</div>) })}</div><div className="absolute bottom-24 px-8 text-center" style={{ opacity: Math.min(0.8, Math.max(0, (frame - 20) / 20)) }}><p className="text-white/60 text-xs font-light tracking-widest uppercase border-t border-white/20 pt-2">{text}</p></div></div>;
@@ -525,7 +526,7 @@ const MinimalText = ({ text, frame, highlightWords, event, getSentiment }) => { 
 // ========================================== 
 // 🎞️ 组件：媒体选择器弹窗 (取代下拉菜单)
 // ========================================== 
-const MediaPickerModal = ({ isOpen, onClose, images, onSelect, onAddImage, onRemove }: { isOpen: boolean; onClose: () => void; images: MediaItem[]; onSelect: (ref: string) => void; onAddImage: (url: string) => void; onRemove: () => void; }) => {
+const MediaPickerModal = ({ isOpen, onClose, images, onSelect, onAddImage, onRemove }: { isOpen: boolean; onClose: () => void; images: MediaItem[]; onSelect: (ref: string) => void; onAddImage: (url: string) => void; onRemove: () => void; }) => { 
     const [customUrl, setCustomUrl] = useState('');
     if (!isOpen) return null;
 
@@ -694,7 +695,7 @@ export default function App() {
               setSelectedMarkerId(markerIds.has(parsed.selectedMarkerId) ? parsed.selectedMarkerId : null);
           }
 
-          if (typeof parsed.activeTab === "string" && ["editor", "storyboard", "style", "settings"].includes(parsed.activeTab)) {
+          if (typeof parsed.activeTab === "string" && ["editor", "storyboard", "style", "settings", "resources"].includes(parsed.activeTab)) {
               setActiveTab(parsed.activeTab);
           }
 
@@ -1010,6 +1011,12 @@ export default function App() {
   };
 
   const buildLayerClips = (items: ScriptItem[]) => {
+      const getLayerZIndex = (trackId: string) => {
+          if (trackId === "background") return 0;
+          if (trackId === "broll") return 10;
+          if (trackId === "cutout") return 20;
+          return 0;
+      };
       return items.flatMap((item) => ([ 
           {
               id: `${item.id}::bg`,
@@ -1018,6 +1025,7 @@ export default function App() {
               start: item.start,
               duration: item.duration,
               trackId: "background",
+              zIndex: getLayerZIndex("background"),
               motionStyle: item.motionStyle ?? DEFAULT_MOTION_STYLE,
               sentiment: item.event === "normal" ? "neutral" : item.event,
           },
@@ -1028,6 +1036,7 @@ export default function App() {
               start: item.start,
               duration: item.duration,
               trackId: "cutout",
+              zIndex: getLayerZIndex("cutout"),
               visualStyle: item.cutoutStyle ?? DEFAULT_CUTOUT_STYLE,
               src: item.bgImage ?? null,
               sentiment: item.event === "normal" ? "neutral" : item.event,
@@ -1039,6 +1048,7 @@ export default function App() {
               start: item.start,
               duration: item.duration,
               trackId: "broll",
+              zIndex: getLayerZIndex("broll"),
               visualStyle: item.brollStyle ?? DEFAULT_BROLL_STYLE,
               src: item.bgImage ?? null,
               sentiment: item.event === "normal" ? "neutral" : item.event,
@@ -1072,7 +1082,7 @@ export default function App() {
           const regex = new RegExp(keyword, 'g');
           newText = newText.replace(regex, `[${keyword}]`);
       });
-      newText = newText.replace(/\<\</g, '<').replace(/\>\>/g, '>');
+      newText = newText.replace(/<</g, '<').replace(/>>/g, '>');
       setInputText(newText);
   };
 
@@ -1342,7 +1352,6 @@ export default function App() {
   }, [currentTime, scriptData, totalDuration]);
 
   const currentItem = currentLineIndex >= 0 ? scriptData[currentLineIndex] : null;
-  const localFrame = currentItem ? Math.max(0, Math.floor((currentTime - currentItem.start) * FPS)) : 0;
 
   const findActiveLayerClip = (trackId: string) => {
       let candidate: Clip | null = null;
@@ -1361,7 +1370,6 @@ export default function App() {
   const activeCutoutClip = useMemo(() => findActiveLayerClip("cutout"), [layerClips, currentTime]);
   const activeBrollClip = useMemo(() => findActiveLayerClip("broll"), [layerClips, currentTime]);
 
-  const effectiveSubtitleStyle = currentItem?.subtitleStyle ?? activeSubtitleStyle;
   const effectiveMotionStyle = activeBackgroundClip?.motionStyle ?? activeMotionStyle;
   const effectiveCutoutStyle = activeCutoutClip?.visualStyle ?? activeCutoutStyle;
   const effectiveBrollStyle = activeBrollClip?.visualStyle ?? activeBrollStyle;
@@ -1386,15 +1394,24 @@ export default function App() {
       return layerClips.find((clip) => clip.id === selectedClipIds[0]) ?? null;
   }, [layerClips, selectedClipIds]);
 
-  const subtitleBoxStyle = useMemo(() => {
-      if (!currentItem) return null;
-      const width = currentItem.width ?? PREVIEW_WIDTH;
-      const height = currentItem.height ?? PREVIEW_HEIGHT;
-      const x = currentItem.x ?? PREVIEW_WIDTH / 2;
-      const y = currentItem.y ?? PREVIEW_HEIGHT / 2;
-      const scale = currentItem.scale ?? 1;
-      const rotation = currentItem.rotation ?? 0;
-      const opacity = currentItem.opacity ?? 1;
+  const activeSubtitleItems = useMemo(() => {
+      if (!scriptData.length) return [];
+      return scriptData.filter((item) => {
+          if (currentTime < item.start || currentTime >= item.start + item.duration) return false;
+          const track = tracks.find((t) => t.id === (item.trackId || "text"));
+          if (track?.isHidden) return false;
+          return true;
+      });
+  }, [currentTime, scriptData, tracks]);
+
+  const getSubtitleBoxStyle = useCallback((item: ScriptItem, index: number) => {
+      const width = item.width ?? PREVIEW_WIDTH;
+      const height = item.height ?? PREVIEW_HEIGHT;
+      const x = item.x ?? PREVIEW_WIDTH / 2;
+      const y = item.y ?? PREVIEW_HEIGHT / 2;
+      const scale = item.scale ?? 1;
+      const rotation = item.rotation ?? 0;
+      const opacity = item.opacity ?? 1;
       return {
           position: "absolute",
           left: x,
@@ -1404,10 +1421,10 @@ export default function App() {
           transform: `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`,
           transformOrigin: "center center",
           opacity,
-          zIndex: 60,
+          zIndex: 60 + index,
           pointerEvents: "none",
       } as React.CSSProperties;
-  }, [currentItem]);
+  }, []);
 
   useEffect(() => {
       if (totalDuration > 0 && currentTime > totalDuration) {
@@ -1564,9 +1581,12 @@ export default function App() {
       setScriptData((prev) => {
           return prev.map((item) => {
               if (item.id !== clipId) return item;
+              const { src, ...rest } = updates;
+              const nextText = typeof src === "string" ? src : item.text;
               return {
                   ...item,
-                  ...updates,
+                  ...rest,
+                  text: nextText,
                   start: typeof updates.start === "number" ? Math.max(0, updates.start) : item.start,
                   duration: typeof updates.duration === "number" ? Math.max(0.1, updates.duration) : item.duration,
                   trackId: typeof updates.trackId === "string" ? updates.trackId : item.trackId,
@@ -1603,9 +1623,12 @@ export default function App() {
                   const match = textUpdates.find((entry) => entry.id === item.id);
                   if (!match) return item;
                   const next = match.updates;
+                  const { src, ...rest } = next;
+                  const nextText = typeof src === "string" ? src : item.text;
                   return {
                       ...item,
-                      ...next,
+                      ...rest,
+                      text: nextText,
                       start: typeof next.start === "number" ? Math.max(0, next.start) : item.start,
                       duration: typeof next.duration === "number" ? Math.max(0.1, next.duration) : item.duration,
                       trackId: typeof next.trackId === "string" ? next.trackId : item.trackId,
@@ -1620,10 +1643,8 @@ export default function App() {
           setSelectedClipIds([]);
           return;
       }
-      const target = clips.find((clip) => clip.id === clipId);
-      if (target) {
-          setCurrentTime(target.start);
-      }
+      // Removed auto-seek behavior (setCurrentTime) on select as it was jarring for users
+      
       const isMulti = event?.shiftKey || event?.metaKey || event?.ctrlKey;
       if (!isMulti) {
           setSelectedClipIds([clipId]);
@@ -1720,6 +1741,7 @@ export default function App() {
 
   const handleDropClip = (data: { type: Clip["type"]; src?: string; options?: Partial<Clip> }, trackId: string, time: number) => {
       const duration = 2;
+      const layerZIndex = trackId === "background" ? 0 : trackId === "broll" ? 10 : trackId === "cutout" ? 20 : 0;
       if (trackId === "text") {
           const text = data.src ?? "新字幕";
           const newItem: ScriptItem = {
@@ -1739,10 +1761,10 @@ export default function App() {
               rotation: 0,
               opacity: 1,
               trackId,
-              subtitleStyle: activeSubtitleStyle,
-              motionStyle: activeMotionStyle,
-              cutoutStyle: activeCutoutStyle,
-              brollStyle: activeBrollStyle,
+              subtitleStyle: data.options?.subtitleStyle ?? activeSubtitleStyle,
+              motionStyle: data.options?.motionStyle ?? activeMotionStyle,
+              cutoutStyle: data.options?.cutoutStyle ?? activeCutoutStyle,
+              brollStyle: data.options?.brollStyle ?? activeBrollStyle,
           };
           setScriptData((prev) => [...prev, newItem]);
           return;
@@ -1756,7 +1778,8 @@ export default function App() {
               start: time,
               duration,
               trackId,
-              motionStyle: activeMotionStyle,
+              zIndex: layerZIndex,
+              motionStyle: data.options?.motionStyle ?? activeMotionStyle,
           };
           setLayerClips((prev) => [...prev, newClip]);
           return;
@@ -1770,8 +1793,9 @@ export default function App() {
               start: time,
               duration,
               trackId,
-              visualStyle: activeCutoutStyle,
-              src: config.images[0] ?? null,
+              zIndex: layerZIndex,
+              visualStyle: data.options?.visualStyle ?? activeCutoutStyle,
+              src: data.src ?? config.images[0] ?? null,
           };
           setLayerClips((prev) => [...prev, newClip]);
           return;
@@ -1785,8 +1809,9 @@ export default function App() {
               start: time,
               duration,
               trackId,
-              visualStyle: activeBrollStyle,
-              src: config.images[0] ?? null,
+              zIndex: layerZIndex,
+              visualStyle: data.options?.visualStyle ?? activeBrollStyle,
+              src: data.src ?? config.images[0] ?? null,
           };
           setLayerClips((prev) => [...prev, newClip]);
           return;
@@ -1810,6 +1835,13 @@ export default function App() {
           setLayerClips((prev) => [...prev, newClip]);
       }
   };
+
+  const handleAddResourceClip = useCallback(
+      (type: Clip["type"], trackId: string, src?: string, options?: Partial<Clip>) => {
+          handleDropClip({ type, src, options }, trackId, currentTime);
+      },
+      [currentTime, handleDropClip]
+  );
   
   return (
     <div className="h-screen w-screen flex overflow-hidden transition-colors duration-200" style={{ backgroundColor: theme.bg, color: theme.text }}>
@@ -1870,16 +1902,20 @@ export default function App() {
                         />
                     </div>
                 )}
-                {currentItem && subtitleBoxStyle && (
-                    <div style={subtitleBoxStyle}>
-                        {effectiveSubtitleStyle === 'focus' && <FocusText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                        {effectiveSubtitleStyle === 'kinetic' && <KineticText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                        {effectiveSubtitleStyle === 'scrapbook' && <ScrapbookText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                        {effectiveSubtitleStyle === 'bubble' && <BubbleText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                        {effectiveSubtitleStyle === 'impact' && <ImpactText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                        {effectiveSubtitleStyle === 'minimal' && <MinimalText text={currentItem.text} frame={localFrame} highlightWords={currentItem.highlight} event={currentItem.event} getSentiment={getWordSentiment} />}
-                    </div>
-                )}
+                {activeSubtitleItems.map((item, index) => {
+                    const frame = Math.max(0, Math.floor((currentTime - item.start) * FPS));
+                    const subtitleStyle = item.subtitleStyle ?? activeSubtitleStyle;
+                    return (
+                        <div key={item.id} style={getSubtitleBoxStyle(item, index)}>
+                            {subtitleStyle === 'focus' && <FocusText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                            {subtitleStyle === 'kinetic' && <KineticText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                            {subtitleStyle === 'scrapbook' && <ScrapbookText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                            {subtitleStyle === 'bubble' && <BubbleText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                            {subtitleStyle === 'impact' && <ImpactText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                            {subtitleStyle === 'minimal' && <MinimalText text={item.text} frame={frame} highlightWords={item.highlight ?? []} event={item.event} getSentiment={getWordSentiment} />}
+                        </div>
+                    );
+                })}
                 <PreviewOverlay
                     clip={selectedClip}
                     projectWidth={PREVIEW_WIDTH}
@@ -1915,11 +1951,11 @@ export default function App() {
                {/* 顶部标签页 & 主题切换 */}
                <div className="flex justify-between items-center mb-4 shrink-0 gap-4">
                    <div className="flex flex-1 rounded-xl p-1 shadow-sm border transition-colors" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
-                       {['editor', 'storyboard', 'style', 'settings'].map(tab => (
+                       {['editor', 'storyboard', 'style', 'settings', 'resources'].map(tab => (
                            <button 
                                 key={tab}
                                 onClick={() => setActiveTab(tab)} 
-                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === tab ? 'shadow' : 'hover:bg-opacity-80'}`}
+                                className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${activeTab === tab ? 'shadow' : 'hover:bg-opacity-80'}`}
                                 style={{ 
                                     backgroundColor: activeTab === tab ? (theme.mode === 'dark' ? '#4e5157' : '#e5e7eb') : 'transparent',
                                     color: activeTab === tab ? theme.text : theme.textSecondary 
@@ -1929,6 +1965,7 @@ export default function App() {
                                {tab === 'storyboard' && "2. 分镜"}
                                {tab === 'style' && "3. 风格"}
                                {tab === 'settings' && "4. 配置"}
+                               {tab === 'resources' && "5. 资源"}
                            </button>
                        ))}
                    </div>
@@ -1988,7 +2025,7 @@ export default function App() {
                                    return (
                                        <div key={index} 
                                             className="flex gap-3 p-2 rounded-lg border transition-all relative"
-                                            style={{ 
+                                            style={{
                                                 backgroundColor: isActive ? (theme.mode === 'dark' ? '#2c241b' : '#fffbeb') : theme.panelBg,
                                                 borderColor: isActive ? '#f59e0b' : theme.border 
                                             }}
@@ -2022,7 +2059,7 @@ export default function App() {
                                                </div>
                                            </div>
                                        </div>
-                                   )
+                                   );
                                })}
                            </div>
                        </div>
@@ -2043,7 +2080,8 @@ export default function App() {
                            </div>
                            <div className="flex-1 overflow-y-auto p-4 space-y-6 storyboard-scroll">
                                 {/* A-Roll */}
-                                <div className="space-y-3"><h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: theme.textSecondary }}><Move size={14} /> 动态背景</h2><div className="grid grid-cols-3 gap-2">{[{id:'grid', icon:Grid, label:'网格'}, {id:'velocity', icon:Type, label:'急速'}, {id:'curve', icon:CircleDashed, label:'环绕'}, {id:'dots', icon:Target, label:'点阵'}, {id:'plus', icon:Plus, label:'加号'}, {id:'cross', icon:X, label:'叉号'}].map(s => (<button key={s.id} onClick={() => { setActiveMotionStyle(s.id); updateCurrentItemStyles({ motionStyle: s.id }); }} className="p-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all border" style={{ backgroundColor: activeMotionStyle === s.id ? (theme.mode === 'dark' ? '#3574f0' : '#e0e7ff') : theme.buttonBg, borderColor: theme.border, color: activeMotionStyle === s.id ? (theme.mode === 'dark' ? '#fff' : '#4338ca') : theme.textSecondary }}><s.icon size={18}/> <span className="text-[10px] font-bold">{s.label}</span></button>))}</div>
+                                <div className="space-y-3"><h2 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: theme.textSecondary }}><Move size={14} /> 动态背景</h2><div className="grid grid-cols-3 gap-2">{[{id:'grid', icon:Grid, label:'网格'}, {id:'velocity', icon:Type, label:'急速'}, {id:'curve', icon:CircleDashed, label:'环绕'}, {id:'dots', icon:Target, label:'点阵'}, {id:'plus', icon:Plus, label:'加号'}, {id:'cross', icon:X, label:'叉号'}].map(s => (<button key={s.id} onClick={() => { setActiveMotionStyle(s.id); updateCurrentItemStyles({ motionStyle: s.id }); }} className="p-3 rounded-lg flex flex-col items-center justify-center gap-1 transition-all border" style={{ backgroundColor: activeMotionStyle === s.id ? (theme.mode === 'dark' ? '#3574f0' : '#e0e7ff') : theme.buttonBg, borderColor: theme.border, color: activeMotionStyle === s.id ? (theme.mode === 'dark' ? '#fff' : '#4338ca') : theme.textSecondary }}><s.icon size={18}/> <span className="text-[10px] font-bold">{s.label}</span></button>))}
+                                </div>
                                 {activeMotionStyle === 'grid' && (
                                     <div className="flex gap-2 mt-2 p-2 rounded-lg transition-colors" style={{ backgroundColor: theme.bg }}>
                                         <span className="text-[10px] font-bold uppercase tracking-wider self-center" style={{ color: theme.textSecondary }}>方向:</span>
@@ -2075,7 +2113,8 @@ export default function App() {
                                    <textarea 
                                        className="w-full p-3 rounded-lg text-xs font-mono outline-none h-20 resize-none theme-input"
                                        value={config.bgKeywords.join(', ')}
-                                       onChange={(e) => setConfig({...config, bgKeywords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})}
+                                       onChange={(e) => setConfig({...config, bgKeywords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})
+                                       }
                                        placeholder="例如: 科技, AI, 未来..."
                                    />
                                </div>
@@ -2087,7 +2126,8 @@ export default function App() {
                                        className="w-full p-3 rounded-lg text-xs font-mono outline-none h-24 resize-none theme-input"
                                        style={{ borderColor: '#f59e0b', backgroundColor: theme.mode === 'dark' ? '#2e2315' : '#fffbeb' }}
                                        value={config.positiveWords.join(', ')}
-                                       onChange={(e) => setConfig({...config, positiveWords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})}
+                                       onChange={(e) => setConfig({...config, positiveWords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})
+                                       }
                                        placeholder="例如: 成功, 突破, 增长..."
                                    />
                                </div>
@@ -2098,7 +2138,8 @@ export default function App() {
                                        className="w-full p-3 rounded-lg text-xs font-mono outline-none h-24 resize-none theme-input"
                                        style={{ borderColor: '#f43f5e', backgroundColor: theme.mode === 'dark' ? '#2e151b' : '#fff1f2' }}
                                        value={config.negativeWords.join(', ')}
-                                       onChange={(e) => setConfig({...config, negativeWords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})}
+                                       onChange={(e) => setConfig({...config, negativeWords: e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean)})
+                                       }
                                        placeholder="例如: 失败, 风险, 下跌..."
                                    />
                                </div>
@@ -2269,6 +2310,13 @@ export default function App() {
                                    )}
                                </div>
                            </div>
+                       </div>
+                   )}
+
+                   {/* 5. 资源 (Resources) */}
+                   {activeTab === 'resources' && (
+                       <div className="flex-1 rounded-xl border overflow-hidden shadow-sm h-full transition-colors" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+                           <ResourcesPanel onAddClip={handleAddResourceClip} />
                        </div>
                    )}
                </div>
