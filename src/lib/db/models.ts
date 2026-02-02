@@ -31,3 +31,28 @@ const EditorStateSchema = new Schema({
 });
 
 export const EditorState = models.EditorState || model('EditorState', EditorStateSchema);
+
+const AssetSchema = new Schema({
+  projectId: {
+    type: String,
+    required: true,
+    index: true,
+  },
+  assetId: {
+    type: String,
+    required: true,
+    index: true, 
+  },
+  name: String,
+  type: String,
+  size: Number,
+  data: String, // Base64 string
+  createdAt: Number,
+}, {
+  timestamps: true,
+});
+
+// Composite index to ensure unique assetId per project
+AssetSchema.index({ projectId: 1, assetId: 1 }, { unique: true });
+
+export const Asset = models.Asset || model('Asset', AssetSchema);

@@ -1856,25 +1856,7 @@ export default function App() {
 
   const handleSync = async () => {
       try {
-          // 1. Load Local Assets from IDB
-          const imageRecords = await loadLocalImageRecords(projectId);
-          const audioRecords = await loadLocalAudioRecords(projectId);
-
-          // 2. Convert Blobs to Base64
-          const serializedImages = await Promise.all(
-              imageRecords.map(async (record) => ({
-                  ...record,
-                  data: await blobToDataUrl(record.data), // Convert Blob to DataURL
-              }))
-          );
-
-          const serializedAudios = await Promise.all(
-              audioRecords.map(async (record) => ({
-                  ...record,
-                  data: await blobToDataUrl(record.data),
-              }))
-          );
-
+          // 1. Sync Main Editor State (without heavy assets)
           const payload = {
               version: 1,
               savedAt: Date.now(),
@@ -1896,10 +1878,6 @@ export default function App() {
               activeCutoutStyle,
               activeBrollStyle,
               activeMotionStyle,
-              assets: {
-                  images: serializedImages,
-                  audios: serializedAudios,
-              },
           };
 
           const res = await fetch('/api/sync', {
@@ -1908,13 +1886,38 @@ export default function App() {
               body: JSON.stringify(payload),
           });
 
-          if (!res.ok) {
-              if (res.status === 413) {
-                  throw new Error('Project too large to sync (check image/audio sizes).');
+          if (!res.ok) throw new Error('Main state sync failed');
+
+          // 2. Sync Local Images (One by One)
+          const imageRecords = await loadLocalImageRecords(projectId);
+          let successCount = 0;
+          
+          for (const record of imageRecords) {
+              try {
+                  const base64Data = await blobToDataUrl(record.data);
+                  const assetPayload = {
+                      projectId,
+                      assetId: record.id,
+                      name: record.name,
+                      type: record.type,
+                      size: record.size,
+                      data: base64Data,
+                  };
+
+                  const assetRes = await fetch('/api/sync/assets', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(assetPayload),
+                  });
+
+                  if (assetRes.ok) successCount++;
+                  else console.warn(`Failed to sync asset ${record.id}`);
+              } catch (err) {
+                  console.error(`Error processing asset ${record.id}`, err);
               }
-              throw new Error('Sync failed');
           }
-          alert('Successfully synced to cloud (including local assets)!');
+
+          alert(`Successfully synced to cloud! (${successCount}/${imageRecords.length} images uploaded)`);
       } catch (e: any) {
           console.error(e);
           alert(`Failed to sync to cloud: ${e.message}`);
@@ -1923,65 +1926,46 @@ export default function App() {
 
   const handleFetch = async () => {
       try {
+          // 1. Fetch Main Editor State
           const res = await fetch(`/api/sync?projectId=${projectId}`);
           if (!res.ok) throw new Error('Fetch failed');
           const { data: parsed } = await res.json();
           
           if (!parsed) return;
-          
-          // 1. Restore Assets to IDB
-          if (parsed.assets) {
-              const { images = [], audios = [] } = parsed.assets;
-              
-              // Restore Images
-              const nextImageMap: Record<string, string> = {};
-              await Promise.all(images.map(async (record: any) => {
-                  try {
-                      const blob = dataURItoBlob(record.data);
-                      const restoredRecord: LocalImageRecord = {
-                          id: record.id,
-                          projectId: record.projectId,
-                          name: record.name,
-                          type: record.type,
-                          size: record.size,
-                          createdAt: record.createdAt,
-                          data: blob,
-                      };
-                      await saveLocalImageRecord(restoredRecord);
-                      nextImageMap[record.id] = record.data;
-                  } catch (err) {
-                      console.warn(`Failed to restore image ${record.id}`, err);
-                  }
-              }));
-              setLocalImageDataUrls((prev) => ({ ...prev, ...nextImageMap }));
 
-              // Restore Audios
-              const nextAudioMap: Record<string, string> = {};
-              const nextAudioMeta: Record<string, { name: string; duration: number }> = {};
-              await Promise.all(audios.map(async (record: any) => {
-                  try {
-                      const blob = dataURItoBlob(record.data);
-                      const restoredRecord: LocalAudioRecord = {
-                          id: record.id,
-                          projectId: record.projectId,
-                          name: record.name,
-                          type: record.type,
-                          size: record.size,
-                          duration: record.duration,
-                          createdAt: record.createdAt,
-                          data: blob,
-                      };
-                      await saveLocalAudioRecord(restoredRecord);
-                      nextAudioMap[record.id] = record.data;
-                      nextAudioMeta[record.id] = { name: record.name, duration: record.duration };
-                  } catch (err) {
-                      console.warn(`Failed to restore audio ${record.id}`, err);
-                  }
-              }));
-              setLocalAudioDataUrls((prev) => ({ ...prev, ...nextAudioMap }));
-              setLocalAudioMeta((prev) => ({ ...prev, ...nextAudioMeta }));
+          // 2. Fetch Assets (One request for list, but restoration is processed individually)
+          // Note: If the asset list itself is huge, we might need pagination, but it's better than one massive document.
+          // MongoDB documents are limited to 16MB. If we have many large images, the response here might be large.
+          // Ideally, we would fetch a list of IDs and then fetch data individually.
+          // For now, let's try fetching the list. If this becomes an issue, we can refactor to fetch metadata then data.
+          const assetRes = await fetch(`/api/sync/assets?projectId=${projectId}`);
+          if (assetRes.ok) {
+              const { data: assets } = await assetRes.json();
+              if (Array.isArray(assets)) {
+                   const nextImageMap: Record<string, string> = {};
+                   for (const asset of assets) {
+                       try {
+                           const blob = dataURItoBlob(asset.data);
+                           const restoredRecord: LocalImageRecord = {
+                               id: asset.assetId,
+                               projectId: asset.projectId,
+                               name: asset.name,
+                               type: asset.type,
+                               size: asset.size,
+                               createdAt: asset.createdAt || Date.now(),
+                               data: blob,
+                           };
+                           await saveLocalImageRecord(restoredRecord);
+                           nextImageMap[asset.assetId] = asset.data;
+                       } catch (err) {
+                           console.warn(`Failed to restore asset ${asset.assetId}`, err);
+                       }
+                   }
+                   setLocalImageDataUrls((prev) => ({ ...prev, ...nextImageMap }));
+              }
           }
 
+          // 3. Restore State
           if (parsed.themeMode === "dark" || parsed.themeMode === "light") {
               setThemeMode(parsed.themeMode);
           }
@@ -2042,7 +2026,7 @@ export default function App() {
           if (typeof parsed.activeBrollStyle === "string") setActiveBrollStyle(parsed.activeBrollStyle);
           if (typeof parsed.activeMotionStyle === "string") setActiveMotionStyle(parsed.activeMotionStyle);
 
-          alert('Successfully fetched from cloud (including local assets)!');
+          alert('Successfully fetched from cloud (including local images)!');
       } catch (e: any) {
           console.error(e);
           alert(`Failed to fetch from cloud: ${e.message}`);
