@@ -58,6 +58,7 @@
     "start": "next start",
     "lint": "eslint .",
     "remotion": "remotion studio",
-    "render": "remotion render"
+    "render": "remotion render",
+    "render:cloud": "tsx scripts/render-cloud.ts"
   }
 }

@@ -7,5 +7,7 @@ import { Config } from "@remotion/cli/config";
 import { webpackOverride } from "./src/remotion/webpack-override.mjs";
 
 Config.setVideoImageFormat("jpeg");
+Config.setDimensions(2160, 3840);
+Config.setDotenv(".env");
 
 Config.overrideWebpackConfig(webpackOverride);

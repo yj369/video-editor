@@ -88,8 +88,8 @@ const TrackSchema = z.object({
 });
 
 export const DURATION_IN_FRAMES = 1800; // 30s * 60fps
-export const VIDEO_WIDTH = 1920;
-export const VIDEO_HEIGHT = 1080;
+export const VIDEO_WIDTH = 2160;
+export const VIDEO_HEIGHT = 3840;
 export const VIDEO_FPS = 60;
 
 export const CompositionProps = z.object({
